@@ -1,0 +1,79 @@
+# Define initial parameters.
+units metal
+atom_style full
+boundary p p p
+
+# Define neighbor list options.
+neighbor 2.0 bin
+neigh_modify every 1 delay 0 check yes
+
+# Lattice constant.
+variable a equal 3.612424
+
+# Number of cell units along the directions.
+variable Nx equal 5
+variable Ny equal 5
+variable Nz equal 5
+variable Nz_2 equal 10
+
+# Create simulation box.
+lattice fcc ${a}
+region whole block 0 ${Nx} 0 ${Ny} 0 ${Nz_2}
+create_box 3 whole
+
+# Create bulk atoms.
+region bulk_region block 0 ${Nx} 0 ${Ny} 0 ${Nz}
+create_atoms 1 region bulk_region
+
+# Import CH4 atoms. 
+read_data data_mol add append offset 1 0 0 0 0
+
+# Define stationary atoms and fix.
+variable stationary_atoms atom (z<4*${a})
+group stationary variable stationary_atoms
+group moving subtract all stationary
+fix 1 stationary setforce 0 0 0
+
+# Group Ni and CH4 atoms.
+group ni molecule 0
+group ch4 subtract all ni
+ 
+# Define atomic masses. C and H already defined in data file.
+mass 1 58.6934
+
+# Set interatomic potentials.
+pair_style reax/c NULL safezone 1.6 mincap 100
+pair_coeff * * ffield.reax Ni C H 
+fix 2 all qeq/reax 100 0 10 1e-6 reax/c
+
+# Define OVITO readable dump.
+dump 1 all custom 1000 CH4onNi_distributed_rigid.lammpstrj id mol type x y z vx vy vz fx fy fz
+dump_modify 1 sort id 
+
+# Set output step and values.
+thermo 1000
+thermo_style custom step temp etotal pe ke
+
+# Optimize initial structure.
+minimize 1.0e-12 1.0e-12 1000 10000
+
+# Define dt.
+timestep 0.0001 # 1e-7 ns. 
+
+# Define damping parameter.
+variable damp equal $(400*dt)
+
+# Give initial velocity to moving atoms.
+velocity moving create 1 12345 rot yes dist gaussian
+
+# Thermalize the system keeping C-H bonds intact.
+fix 3 ni nvt temp 1 500 ${damp}
+fix 4 ch4 rigid/nvt/small molecule temp 1 500 ${damp}
+run 20000
+
+unfix 3
+unfix 4
+
+# Relax at 500 K.
+fix 5 all nvt temp 500 500 ${damp}
+run 200000

@@ -1,0 +1,9 @@
+tolerance 2.0
+filetype xyz
+output ch4onni.pdb
+seed -1
+
+structure methane.xyz
+	number 20
+	inside box 0 0 20 18.06 18.06 34
+end structure
